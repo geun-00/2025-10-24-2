@@ -37,7 +37,7 @@ jobs:
     needs: makeTagAndRelease
     runs-on: ubuntu-latest
     env:
-      DOCKER_IMAGE_NAME: app20251024
+      DOCKER_IMAGE_NAME: kp-2025-10-24-2
     steps:
       - uses: actions/checkout@v4
       - name: Docker Buildx 설치
@@ -63,8 +63,15 @@ jobs:
             ghcr.io/${{ env.OWNER_LC }}/${{ env.DOCKER_IMAGE_NAME }}:latest
   deploy:
     runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE_NAME: kp-2025-10-24-2
     needs: [ buildImageAndPush ]
     steps:
+      - name: set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >> ${GITHUB_ENV}
+        env:
+          OWNER: '${{ github.repository_owner }}'
       - name: AWS SSM Send-Command
         uses: peterkimzz/aws-ssm-send-command@master
         id: ssm
@@ -76,8 +83,17 @@ jobs:
           working-directory: /
           comment: Deploy
           command: |
-            docker pull ghcr.io/${{ env.OWNER_LC }}/app20251024:latest
+            # 새 이미지 다운로드
+            docker pull ghcr.io/${{ env.OWNER_LC }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+
+            # 기존 컨테이너 중지
             docker stop app1 2>/dev/null
+
+            # 기존 컨테이너 제거
             docker rm app1 2>/dev/null
-            docker run -d --name app1 -p 8080:8080 ghcr.io/${{ env.OWNER_LC }}/app20251024:latest
+
+            # 새 이미지를 실행해서 새 컨테이너 생성
+            docker run -d --name app1 -p 8080:8080 ghcr.io/${{ env.OWNER_LC }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+
+            # 기존 이미지 제거
             docker rmi $(docker images -f "dangling=true" -q)
